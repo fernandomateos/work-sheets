@@ -50,7 +50,7 @@ options(allow_html_in_all_outputs=TRUE)
 # remotes::install_github("ThinkR-open/remedy")
 
 
-pacman::p_load(tidyverse,janitor, data.table, here, rio, lubridate,
+pacman::p_load(tidyverse,janitor, data.table, here, rio, lubridate,writexl,
                gtsummary,  #to make tables
                flextable,  #to save tables in word
                clockify   #API to get data
@@ -69,16 +69,30 @@ pacman::p_load(tidyverse,janitor, data.table, here, rio, lubridate,
 worksheet <- googledrive::drive_get("worksheet") %>% 
   googlesheets4::read_sheet() %>% 
   dplyr::mutate(month = lubridate::month(date, label = T)) %>% 
+  dplyr::mutate(day = lubridate::day(date)) %>% 
+  dplyr::mutate(year = lubridate::year(date)) %>% 
   dplyr::mutate(time = as.numeric(time))
 
 
 by_date <- worksheet %>% 
+  dplyr::filter(month =="Jan") %>% 
   dplyr::group_by(date) %>% 
   dplyr::mutate(time = sum(time)) %>% 
   dplyr::mutate(tasks_day = paste0(task,collapse = ", ")) %>% 
-  dplyr::select(date,tasks_day,time)
+  dplyr::select(year, day, month, tasks_day,time, date) %>% 
+  dplyr::distinct() %>% 
+  dplyr::ungroup() %>% 
+  dplyr::select(!date)
 
+
+
+ # nando_timesheet <- googlesheets4::gs4_create(
+ #    "nando_timesheet",
+ #    sheets = "January")
   
+ googlesheets4::sheet_write(by_date, ss = nando_timesheet, sheet = "January")
+ 
+   
 
 
 ```
@@ -91,8 +105,9 @@ source(here::here("api.R"))
 
 set_api_key(clock_keys)
 
+projects <- clockify::projects()
 
-data_clock<- clockify::time_entries(concise = F)
+data_clock<- clockify::time_entries(concise = F) 
 
 
 

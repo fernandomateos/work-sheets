@@ -53,7 +53,8 @@ options(allow_html_in_all_outputs=TRUE)
 pacman::p_load(tidyverse,janitor, data.table, here, rio, lubridate,writexl,
                gtsummary,  #to make tables
                flextable,  #to save tables in word
-               clockify   #API to get data
+               clockify,   #API to get data
+               plyr       # to use function round_any
 )
 
 
@@ -64,33 +65,33 @@ pacman::p_load(tidyverse,janitor, data.table, here, rio, lubridate,writexl,
 ```{r}
 
 # googledrive::drive_download("worksheet", type ="csv", here("data", "worksheet.csv"))
-
-
-worksheet <- googledrive::drive_get("worksheet") %>% 
-  googlesheets4::read_sheet() %>% 
-  dplyr::mutate(month = lubridate::month(date, label = T)) %>% 
-  dplyr::mutate(day = lubridate::day(date)) %>% 
-  dplyr::mutate(year = lubridate::year(date)) %>% 
-  dplyr::mutate(time = as.numeric(time))
-
-
-by_date <- worksheet %>% 
-  dplyr::filter(month =="Jan") %>% 
-  dplyr::group_by(date) %>% 
-  dplyr::mutate(time = sum(time)) %>% 
-  dplyr::mutate(tasks_day = paste0(task,collapse = ", ")) %>% 
-  dplyr::select(year, day, month, tasks_day,time, date) %>% 
-  dplyr::distinct() %>% 
-  dplyr::ungroup() %>% 
-  dplyr::select(!date)
-
-
-
- # nando_timesheet <- googlesheets4::gs4_create(
- #    "nando_timesheet",
- #    sheets = "January")
-  
- googlesheets4::sheet_write(by_date, ss = nando_timesheet, sheet = "January")
+# 
+# 
+# worksheet <- googledrive::drive_get("worksheet") %>% 
+#   googlesheets4::read_sheet() %>% 
+#   dplyr::mutate(month = lubridate::month(date, label = T)) %>% 
+#   dplyr::mutate(day = lubridate::day(date)) %>% 
+#   dplyr::mutate(year = lubridate::year(date)) %>% 
+#   dplyr::mutate(time = as.numeric(time))
+# 
+# 
+# by_date <- worksheet %>% 
+#   dplyr::filter(month =="Jan") %>% 
+#   dplyr::group_by(date) %>% 
+#   dplyr::mutate(time = sum(time)) %>% 
+#   dplyr::mutate(tasks_day = paste0(task,collapse = ", ")) %>% 
+#   dplyr::select(year, day, month, tasks_day,time, date) %>% 
+#   dplyr::distinct() %>% 
+#   dplyr::ungroup() %>% 
+#   dplyr::select(!date)
+# 
+# 
+# 
+#  # nando_timesheet <- googlesheets4::gs4_create(
+#  #    "nando_timesheet",
+#  #    sheets = "January")
+#   
+#  googlesheets4::sheet_write(by_date, ss = nando_timesheet, sheet = "January")
  
    
 
@@ -99,15 +100,94 @@ by_date <- worksheet %>%
 
 # Data clockify
 
+Environment variables
+https://cran.r-project.org/web/packages/httr/vignettes/secrets.html
+
+Asking each time is a hassle, so you might want to store the secret across sessions. One easy way to do that is with environment variables. Environment variables, or envvars for short, are a cross platform way of passing information to processes.
+
+For passing envvars to R, you can list name-value pairs in a file called .Renviron in your home directory. The easiest way to edit it is to run:
+
+file.edit("~/.Renviron")
+
+The file looks something like
+
+VAR1 = value1
+VAR2 = value2
+
+And you can access the values in R using Sys.getenv():
+
+Sys.getenv("VAR1")
+ [1] "value1"
+
+Note that .Renviron is only processed on startup, so you’ll need to restart R to see changes.
+
+These environment variables will be available in every running R process, and can easily be read by any other program on your computer to access that file directly. For more security, use the keyring package.
+
 ```{r}
 
-source(here::here("api.R"))
+clock_keys <- Sys.getenv("clock_keys")
 
 set_api_key(clock_keys)
 
 projects <- clockify::projects()
 
 data_clock<- clockify::time_entries(concise = F) 
+
+full <- data_clock %>% 
+  dplyr::left_join(projects, by= "project_id") %>% 
+  dplyr::select(description, project_name, time_start, time_end, duration, billable.x) %>% 
+  dplyr::mutate(date = lubridate::date(time_start)) %>% 
+  dplyr::mutate(month = lubridate::month(date, label = T)) %>% 
+  dplyr::mutate(day = lubridate::day(date)) %>% 
+  dplyr::mutate(year = lubridate::year(date))
+
+
+
+
+
+
+
+
+katka <- full %>% 
+  dplyr::rename(task = description,
+                project = project_name,
+                hours = duration,
+                for_alka = billable.x) %>% 
+  dplyr::filter(for_alka == "TRUE") %>%  # only alka work
+    dplyr::mutate(hours = plyr::round_any(hours/60, 0.5, f = ceiling )) %>% 
+  dplyr::group_by(date) %>% 
+  dplyr::mutate(total = sum(hours)) %>% 
+  dplyr::mutate(tasks_day = paste0(task,collapse = ", ")) %>% 
+  dplyr::group_by(date, project) %>% 
+  dplyr::mutate(hours_each_project = sum(hours)) %>% 
+  dplyr::select(year,month, day, date, tasks_day, project,for_alka, hours_each_project, total) %>% 
+  dplyr::distinct() %>% 
+  tidyr::pivot_wider(names_from = project, 
+                   values_from = hours_each_project) %>% 
+  dplyr::select(!for_alka) %>% 
+  replace(is.na(.), 0)
+
+
+
+# Load the google sheet
+
+nando_timesheet <- googledrive::drive_get("nando_timesheet")
+
+#add a new tab for the new month
+
+katka %>% 
+  dplyr::filter(month == "Feb") %>% # Select the month
+  dplyr::select(!c(year,month,day)) %>% 
+ googlesheets4::sheet_write(ss = nando_timesheet, sheet = "February") #create the new tab
+
+# Review the data!
+ 
+  
+  
+
+
+
+
 
 
 

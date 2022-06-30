@@ -181,15 +181,112 @@ katka %>%
  googlesheets4::sheet_write(ss = nando_timesheet, sheet = "February") #create the new tab
 
 # Review the data!
+
+#add a new tab for the new month
+
+katka %>% 
+  dplyr::filter(month == "Mar") %>% # Select the month
+  dplyr::select(!c(year,month,day)) %>% 
+ googlesheets4::sheet_write(ss = nando_timesheet, sheet = "March") #create the new tab
  
+  # Review the data!
   
+#add a new tab for the new month
+
+katka %>% 
+  dplyr::filter(month == "Apr") %>% # Select the month
+  dplyr::select(!c(year,month,day)) %>% 
+ googlesheets4::sheet_write(ss = nando_timesheet, sheet = "April") #create the new tab
+ 
+  # Review the data!
   
 
+#add a new tab for the new month
 
+katka %>% 
+  dplyr::filter(month == "May") %>% # Select the month
+  dplyr::select(!c(year,month,day)) %>% 
+ googlesheets4::sheet_write(ss = nando_timesheet, sheet = "May") #create the new tab
+ 
+  # Review the data!
 
+#add a new tab for June
 
+katka %>% 
+  dplyr::filter(month == "Jun") %>% # Select the month
+  dplyr::select(!c(year,month,day)) %>% 
+ googlesheets4::sheet_write(ss = nando_timesheet, sheet = "June") #create the new tab
+ 
+  # Review the data!
 
 
 
 ```
+
+# For Asta
+
+
+```{r}
+
+clock_keys <- Sys.getenv("clock_keys")
+
+set_api_key(clock_keys)
+
+projects <- clockify::projects()
+
+data_clock<- clockify::time_entries(concise = F) 
+
+full <- data_clock %>% 
+  dplyr::left_join(projects, by= "project_id") %>% 
+  dplyr::select(description, project_name, time_start, time_end, duration, billable.x) %>% 
+  dplyr::mutate(date = lubridate::date(time_start)) %>% 
+  dplyr::mutate(month = lubridate::month(date, label = T)) %>% 
+  dplyr::mutate(day = lubridate::day(date)) %>% 
+  dplyr::mutate(year = lubridate::year(date))
+
+
+asta <- full %>% 
+  dplyr::rename(task = description,
+                project = project_name,
+                hours = duration,
+                for_alka = billable.x) %>% 
+  dplyr::filter(for_alka == "FALSE") %>%  # only ASTA work
+    dplyr::mutate(hours = plyr::round_any(hours/60, 0.5, f = ceiling )) %>% 
+  dplyr::group_by(date) %>% 
+  dplyr::mutate(total = sum(hours)) %>% 
+  dplyr::mutate(tasks_day = paste0(task,collapse = ", ")) %>% 
+  dplyr::group_by(date, project) %>% 
+  dplyr::mutate(hours_each_project = sum(hours)) %>% 
+  dplyr::select(year,month, day, date, tasks_day, project,for_alka, hours_each_project, total) %>% 
+  dplyr::distinct() %>% 
+  tidyr::pivot_wider(names_from = project, 
+                   values_from = hours_each_project) %>% 
+  dplyr::select(!c(Personal,for_alka, ASTA)) %>% 
+    dplyr::rename(hours = total) %>% 
+  replace(is.na(.), 0)
+
+
+```
+
+# Google sheet
+
+```{r}
+
+# Load the google sheet
+
+nrc_timesheet <- googledrive::drive_get("nrc_timesheet")
+
+#add a new tab for the new month
+
+asta %>% 
+  dplyr::filter(month == "Jun") %>% # Select the month
+  dplyr::select(!c(year,month,day)) %>% 
+ googlesheets4::sheet_write(ss = nrc_timesheet, sheet = "June") #create the new tab
+
+# Review the data!
+
+```
+
+
+
 

@@ -140,32 +140,32 @@ full <- data_clock %>%
   dplyr::mutate(month = lubridate::month(date, label = T)) %>% 
   dplyr::mutate(day = lubridate::day(date)) %>% 
   dplyr::mutate(year = lubridate::year(date))
+```
 
 
+# For Katka
 
 
-
-
-
+```{r}
 
 katka <- full %>% 
   dplyr::rename(task = description,
                 project = project_name,
                 hours = duration,
-                for_alka = billable.x) %>% 
-  dplyr::filter(for_alka == "TRUE") %>%  # only alka work
-    dplyr::mutate(hours = plyr::round_any(hours/60, 0.5, f = ceiling )) %>% 
+                billable = billable.x) %>% 
+  dplyr::filter(billable != "FALSE") %>% 
+  dplyr::mutate(hours = plyr::round_any(hours/60, 0.5, f = ceiling )) %>% 
   dplyr::group_by(date) %>% 
   dplyr::mutate(total = sum(hours)) %>% 
   dplyr::mutate(tasks_day = paste0(task,collapse = ", ")) %>% 
   dplyr::group_by(date, project) %>% 
   dplyr::mutate(hours_each_project = sum(hours)) %>% 
-  dplyr::select(year,month, day, date, tasks_day, project,for_alka, hours_each_project, total) %>% 
+  dplyr::select(year,month, day, date, tasks_day, project, hours_each_project, total) %>% 
   dplyr::distinct() %>% 
+  
   tidyr::pivot_wider(names_from = project, 
                    values_from = hours_each_project) %>% 
-  dplyr::select(!for_alka) %>% 
-  replace(is.na(.), 0)
+    replace(is.na(.), 0)
 
 
 
@@ -245,30 +245,24 @@ full <- data_clock %>%
   dplyr::mutate(year = lubridate::year(date))
 
 
-asta <- full %>% 
+asta <-   full %>% 
   dplyr::rename(task = description,
                 project = project_name,
-                hours = duration,
-                for_alka = billable.x) %>% 
-  dplyr::filter(for_alka == "FALSE") %>%  # only ASTA work
+                hours = duration) %>% 
+    dplyr::filter(project == "ASTA") %>% 
     dplyr::mutate(hours = plyr::round_any(hours/60, 0.5, f = ceiling )) %>% 
   dplyr::group_by(date) %>% 
   dplyr::mutate(total = sum(hours)) %>% 
   dplyr::mutate(tasks_day = paste0(task,collapse = ", ")) %>% 
   dplyr::group_by(date, project) %>% 
   dplyr::mutate(hours_each_project = sum(hours)) %>% 
-  dplyr::select(year,month, day, date, tasks_day, project,for_alka, hours_each_project, total) %>% 
-  dplyr::distinct() %>% 
-  tidyr::pivot_wider(names_from = project, 
-                   values_from = hours_each_project) %>% 
-  dplyr::select(!c(Personal,for_alka, ASTA)) %>% 
-    dplyr::rename(hours = total) %>% 
-  replace(is.na(.), 0)
+  dplyr::select(year,month, day, date, tasks_day, project, hours_each_project, total) %>% 
+  dplyr::distinct() 
 
 
 ```
 
-# Google sheet
+## Google sheet
 
 ```{r}
 
